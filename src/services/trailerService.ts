@@ -15,7 +15,7 @@ interface CacheEntry {
 
 export class TrailerService {
   // Cache for 3 minutes — just enough to avoid re-extracting on quick re-renders
-  private static readonly CACHE_TTL_MS = 3 * 60 * 1000;
+  private static readonly CACHE_TTL_MS = 30 * 1000;
   private static urlCache = new Map<string, CacheEntry>();
 
   // ---------------------------------------------------------------------------
