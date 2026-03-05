@@ -668,9 +668,12 @@ export class YouTubeExtractor {
     // Priority: HLS > progressive muxed
     // HLS manifests don't need validation — they're not CDN segment URLs
     if (bestHls) {
-      logger.info('YouTubeExtractor', `Using HLS manifest: ${summarizeUrl(bestHls.manifestUrl)} ${bestHls.height}p`);
+      // Return the specific best variant URL, not the master playlist.
+      // Master playlist lets the player pick quality adaptively (often starts low).
+      // Pinning to the best variant ensures consistent high quality playback.
+      logger.info('YouTubeExtractor', `Using HLS variant: ${summarizeUrl(bestHls.url)} ${bestHls.height}p`);
       return {
-        videoUrl: bestHls.manifestUrl,
+        videoUrl: bestHls.url,
         audioUrl: null,
         quality: `${bestHls.height}p`,
         videoId,
