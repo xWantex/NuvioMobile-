@@ -68,52 +68,67 @@ export interface YouTubeExtractionResult {
 // Constants
 // ---------------------------------------------------------------------------
 
-// Innertube client configs — we use Android (no cipher, direct URLs)
-// and web as fallback (may need cipher decode)
-const INNERTUBE_API_KEY = 'AIzaSyA8ggJvXiQHQFN-YMEoM30s0s3RlxEYJuA';
+// Innertube client configs.
+// Note: ?key= param was deprecated by YouTube in mid-2023 and is no longer sent.
+//
+// IMPORTANT: As of late 2024, YouTube requires Proof of Origin (PO) tokens for
+// most clients (ANDROID, IOS, WEB). Without a PO token, the player API returns
+// format URLs but segment fetches get HTTP 403. The ANDROID_VR client is currently
+// the only client that bypasses PO token requirements and gives full format access
+// without authentication. Keep it first in the client list.
+//
+// Reference: https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide
 const INNERTUBE_URL = 'https://www.youtube.com/youtubei/v1/player';
 
-// Android client gives direct URLs without cipher obfuscation
+// ANDROID_VR (Oculus Quest) — bypasses PO token requirement, full format access.
+// This is the primary client. clientVersion from yt-dlp as of 2025.
+const ANDROID_VR_CLIENT_CONTEXT = {
+  client: {
+    clientName: 'ANDROID_VR',
+    clientVersion: '1.60.19',
+    deviceMake: 'Oculus',
+    deviceModel: 'Quest 3',
+    androidSdkVersion: 32,
+    userAgent:
+      'com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip',
+    hl: 'en',
+    gl: 'US',
+  },
+};
+
+// ANDROID_SDKLESS — secondary fallback, no PO token needed, updated version.
+// Works for most non-age-restricted content.
 const ANDROID_CLIENT_CONTEXT = {
   client: {
     clientName: 'ANDROID',
-    clientVersion: '19.09.37',
+    clientVersion: '20.10.38',
     androidSdkVersion: 30,
+    osName: 'Android',
+    osVersion: '11',
     userAgent:
-      'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
+      'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
     hl: 'en',
     gl: 'US',
   },
 };
 
-// iOS client as secondary fallback
-const IOS_CLIENT_CONTEXT = {
+// TV client — no PO token needed, good format availability.
+const TV_CLIENT_CONTEXT = {
   client: {
-    clientName: 'IOS',
-    clientVersion: '19.09.3',
-    deviceModel: 'iPhone14,3',
+    clientName: 'TVHTML5',
+    clientVersion: '7.20250422.19.00',
     userAgent:
-      'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iPhone OS 15_6 like Mac OS X)',
+      'Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1',
     hl: 'en',
     gl: 'US',
   },
 };
 
-// TV Embedded client — works for age-restricted / embed-allowed content
-const TVHTML5_EMBEDDED_CONTEXT = {
-  client: {
-    clientName: 'TVHTML5_SIMPLY_EMBEDDED_PLAYER',
-    clientVersion: '2.0',
-    hl: 'en',
-    gl: 'US',
-  },
-};
-
-// Web Embedded client — good fallback for content that rejects app clients
+// Web Embedded — fallback for embeddable content, may need PO token for segments.
 const WEB_EMBEDDED_CONTEXT = {
   client: {
     clientName: 'WEB_EMBEDDED_PLAYER',
-    clientVersion: '2.20240726.00.00',
+    clientVersion: '2.20250422.01.00',
     hl: 'en',
     gl: 'US',
   },
@@ -359,7 +374,8 @@ async function writeDashManifestToFile(
 async function fetchPlayerResponse(
   videoId: string,
   context: object,
-  userAgent: string
+  userAgent: string,
+  clientNameId: string = '3'
 ): Promise<InnertubePlayerResponse | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -373,13 +389,13 @@ async function fetchPlayerResponse(
     };
 
     const response = await fetch(
-      `${INNERTUBE_URL}?key=${INNERTUBE_API_KEY}&prettyPrint=false`,
+      `${INNERTUBE_URL}?prettyPrint=false`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'User-Agent': userAgent,
-          'X-YouTube-Client-Name': '3',
+          'X-YouTube-Client-Name': clientNameId,
           'Origin': 'https://www.youtube.com',
           'Referer': `https://www.youtube.com/watch?v=${videoId}`,
         },
@@ -500,24 +516,30 @@ export class YouTubeExtractor {
 
     logger.info('YouTubeExtractor', `Extracting for videoId=${videoId} platform=${platform ?? 'unknown'}`);
 
-    const clients: Array<{ context: object; userAgent: string; name: string }> = [
+    // Client order matters: ANDROID_VR first because it bypasses PO token requirements.
+    // Other clients may return 403 on segment fetch even if player API succeeds.
+    const clients: Array<{ context: object; userAgent: string; name: string; clientNameId: string }> = [
+      {
+        name: 'ANDROID_VR',
+        clientNameId: '28',
+        context: ANDROID_VR_CLIENT_CONTEXT,
+        userAgent: 'com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip',
+      },
       {
         name: 'ANDROID',
+        clientNameId: '3',
         context: ANDROID_CLIENT_CONTEXT,
-        userAgent: 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
+        userAgent: 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
       },
       {
-        name: 'IOS',
-        context: IOS_CLIENT_CONTEXT,
-        userAgent: 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iPhone OS 15_6 like Mac OS X)',
-      },
-      {
-        name: 'TVHTML5_EMBEDDED',
-        context: TVHTML5_EMBEDDED_CONTEXT,
-        userAgent: 'Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0)',
+        name: 'TV',
+        clientNameId: '7',
+        context: TV_CLIENT_CONTEXT,
+        userAgent: 'Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1',
       },
       {
         name: 'WEB_EMBEDDED',
+        clientNameId: '56',
         context: WEB_EMBEDDED_CONTEXT,
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
       },
@@ -529,7 +551,7 @@ export class YouTubeExtractor {
 
     for (const client of clients) {
       logger.info('YouTubeExtractor', `Trying ${client.name} client...`);
-      const resp = await fetchPlayerResponse(videoId, client.context, client.userAgent);
+      const resp = await fetchPlayerResponse(videoId, client.context, client.userAgent, client.clientNameId);
       if (!resp) continue;
 
       const status = resp.playabilityStatus?.status;
