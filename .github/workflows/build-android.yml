@@ -1,0 +1,43 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch: # This allows you to click a button to start the build manually
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive # Critical for Nuvio since it uses submodules!
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17' # Required for modern Android builds
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Generate Android Native Code (Expo Prebuild)
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build APK (Release)
+        run: |
+          cd android
+          ./gradlew assembleRelease
+
+      - name: Upload APK to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: NuvioMobile-AMOLED-Android
+          path: android/app/build/outputs/apk/release/app-release.apk
+
