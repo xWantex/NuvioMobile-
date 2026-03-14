@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Fast Build Android APK
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code (with submodules)
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -18,11 +18,13 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: '17'
+          cache: 'gradle' # 🚀 Caches Gradle dependencies for faster subsequent runs
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm' # 🚀 Caches Node modules
 
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
@@ -30,13 +32,20 @@ jobs:
       - name: Generate Android Native Code (Expo Prebuild)
         run: npx expo prebuild --platform android --no-install
 
-      - name: Build APK (Release)
+      - name: Build APK (Fast/Single Architecture)
         run: |
           cd android
-          ./gradlew assembleRelease
+          # 🚀 The magic flag: only build for modern 64-bit ARM devices
+          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+
+      - name: List Build Outputs (Debug - just in case)
+        if: always()
+        run: find android/app/build/outputs/apk -name "*.apk"
 
       - name: Upload APK to GitHub
         uses: actions/upload-artifact@v4
         with:
-          name: NuvioMobile-AMOLED-Android
-          path: android/app/build/outputs/apk/release/app-release.apk
+          name: NuvioMobile-FastBuild-APK
+          # 🚀 '**' recursively searches all folders just in case Gradle puts it in a subfolder
+          path: android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
