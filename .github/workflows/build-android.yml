@@ -1,7 +1,7 @@
 name: Build Android APK
 
 on:
-  workflow_dispatch: # Manual trigger
+  workflow_dispatch:
 
 jobs:
   build:
@@ -23,17 +23,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm' # Speeds up future builds by caching dependencies
 
       - name: Install Dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Generate Android Native Code (Expo Prebuild)
         run: npx expo prebuild --platform android --no-install
-
-      - name: Make Gradle Executable
-        # This fixes the "Permission Denied" error common in GitHub Actions
-        run: chmod +x android/gradlew
 
       - name: Build APK (Release)
         run: |
