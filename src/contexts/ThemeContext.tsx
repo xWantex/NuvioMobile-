@@ -19,6 +19,21 @@ export const DEFAULT_THEMES: Theme[] = [
     colors: defaultColors,
     isEditable: false,
   },
+    {
+    id: 'amoled',
+    name: 'AMOLED Black',
+    colors: {
+      ...defaultColors,
+      darkBackground: '#000000', // Pure pitch black
+      background: '#000000',     // Ensure base background is black
+      surface: '#080808',        // Slightly lighter for cards/modals
+      card: '#080808',           // Fallback for card backgrounds
+      border: '#1A1A1A',         // Very subtle dark borders
+      // We keep the primary and secondary colors the same as default
+      // so it still looks like Nuvio, just with a black background!
+    },
+    isEditable: false,
+  },
   {
     id: 'ocean',
     name: 'Ocean Blue',
